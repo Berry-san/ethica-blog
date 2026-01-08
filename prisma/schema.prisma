@@ -1,0 +1,174 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  AUTHOR
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  slug        String   @unique
+  password    String   
+  name        String?
+  role        Role     @default(EDITOR)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Authored posts
+  authoredPosts Post[] @relation("PostAuthor")
+
+  // Audit: who created this post in the system
+  createdPosts Post[] @relation("PostCreator")
+
+  // Audit: who last updated it
+  updatedPosts Post[] @relation("PostUpdater")
+
+  // User hierarchy: admin creates authors
+  createdBy    User?   @relation("UserHierarchy", fields: [createdById], references: [id])
+  createdById  String?
+
+  createdUsers User[]  @relation("UserHierarchy")
+
+  auditLogs    AuditLog[]
+
+  refreshTokens RefreshToken[]
+  blacklistedTokens BlacklistedToken[]
+
+  @@map("users")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String   // HTTP Method or Action Name
+  resource   String   // URL or Resource Name
+  resourceId String?  // Optional ID if extractable
+  details    Json?    // Request Body / Changes
+  ip         String? 
+  userAgent  String?
+  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource])
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model BlacklistedToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("blacklisted_tokens")
+}
+
+model Post {
+  id                    String     @id @default(uuid())
+  title                 String
+  slug                  String     @unique
+  content               String     @db.Text
+  excerpt               String?    @db.Text
+  featuredImage         String?
+  featuredImagePublicId String?    // Cloudinary public ID for cleanup
+  status                PostStatus @default(DRAFT)
+  publishedAt           DateTime?
+  readTime              Int
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  author       User   @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  authorId     String
+
+  createdBy    User?  @relation("PostCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById  String?
+
+  updatedBy    User?  @relation("PostUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedById  String?
+
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId    String
+
+  inlineImages PostImage[]
+
+  @@index([slug])
+  @@index([authorId])
+  @@index([status])
+  @@index([categoryId])
+  @@map("posts")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts Post[]
+
+  @@index([slug])
+  @@map("categories")
+}
+
+model Subscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscribers")
+}
+
+model PostImage {
+  id        String   @id @default(uuid())
+  url       String
+  publicId  String   // Cloudinary public ID for cleanup
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@map("post_images")
+}
