@@ -129,6 +129,49 @@ export class PostsService {
     };
   }
 
+  async findPublishedPosts(options?: {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) {
+    const page = options?.page || 1;
+    const limit = options?.limit || 10;
+    const skip = (page - 1) * limit;
+    const sortBy = options?.sortBy || 'createdAt';
+    const sortOrder = options?.sortOrder || 'desc';
+
+    const [data, total] = await Promise.all([
+      this.prisma.post.findMany({
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+        where: {
+          status: PostStatus.PUBLISHED,
+        },
+        include: {
+        author: { select: { id: true, name: true, email: true, slug: true } },
+        category: true,
+      },
+    }),
+    this.prisma.post.count({
+      where: {
+        status: PostStatus.PUBLISHED,
+      },
+    }),
+  ]);
+
+    return {
+      data,
+      meta: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+    };
+  }
+
   async findOne(id: string) {
     const post = await this.prisma.post.findUnique({
       where: { id },

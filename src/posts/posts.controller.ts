@@ -107,6 +107,16 @@ export class PostsController {
       return { url: result.secure_url };
   }
 
+  @Get('published')
+  getPublishedPosts(@Query() query: PaginationDto) {
+    return this.postsService.findPublishedPosts({
+      page: query.page,
+      limit: query.limit,
+      sortBy: query.sortBy,
+      sortOrder: query.sortOrder,
+    });
+  }
+
   @Get()
   findAll(@Query() query: PaginationDto) {
     return this.postsService.findAll({
