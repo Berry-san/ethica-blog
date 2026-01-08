@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { v2 as cloudinary } from 'cloudinary';
 import { FileUploadValidator } from '../validators/file-upload.validator';
 import toStream = require('streamifier');
 
 @Injectable()
 export class CloudinaryService {
+  private readonly logger = new Logger(CloudinaryService.name);
   private readonly fileValidator: FileUploadValidator;
 
   constructor() {
@@ -20,6 +21,8 @@ export class CloudinaryService {
   async uploadImage(file: Express.Multer.File): Promise<any> {
     // Validate file before upload
     await this.fileValidator.validateFile(file);
+    
+    this.logger.log(`Uploading image to Cloudinary: ${file.originalname}`);
 
     return new Promise((resolve, reject) => {
       const upload = cloudinary.uploader.upload_stream(
@@ -30,7 +33,13 @@ export class CloudinaryService {
           transformation: [{ flags: 'strip_profile' }],
         },
         (error, result) => {
-          if (error) return reject(error);
+          if (error) {
+            this.logger.error(`Failed to upload image: ${file.originalname}`, error.stack);
+            return reject(error);
+          }
+          if (result) {
+            this.logger.log(`Image uploaded successfully: ${result.public_id}`);
+          }
           resolve(result);
         },
       );
@@ -41,9 +50,9 @@ export class CloudinaryService {
   async deleteImage(publicId: string): Promise<void> {
     try {
       await cloudinary.uploader.destroy(publicId);
-      console.log(`🗑️ Deleted image from Cloudinary: ${publicId}`);
+      this.logger.log(`Deleted image from Cloudinary: ${publicId}`);
     } catch (error) {
-      console.error(`❌ Failed to delete image from Cloudinary: ${publicId}`, error);
+      this.logger.error(`Failed to delete image from Cloudinary: ${publicId}`, error.stack);
       // Don't throw - allow post deletion to proceed even if Cloudinary delete fails
     }
   }

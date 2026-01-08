@@ -1,21 +1,26 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 // Note: AuditInterceptor is registered via APP_INTERCEPTOR in AuditModule
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
 
   // Get ConfigService for environment variables
   const configService = app.get(ConfigService);
 
   // Global Response Interceptor
   app.useGlobalInterceptors(new ResponseInterceptor());
+
+  // Global Logging Interceptor (logs all HTTP requests)
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Global Exception Filter (catches all errors)
   app.useGlobalFilters(new HttpExceptionFilter());
@@ -72,9 +77,10 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') || 5500;
   await app.listen(port);
 
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/v1/docs`);
-  console.log(`🔒 CORS enabled for: ${corsOrigins.join(', ')}`);
+  logger.log(`🚀 Application is running on: http://localhost:${port}`);
+  logger.log(`📚 API Documentation: http://localhost:${port}/api/v1/docs`);
+  logger.log(`🔒 CORS enabled for: ${corsOrigins.join(', ')}`);
+  logger.log(`Environment: ${configService.get('NODE_ENV')}`);
 }
 
 bootstrap();

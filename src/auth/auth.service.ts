@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as argon2 from 'argon2';
@@ -8,6 +8,7 @@ import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
@@ -16,15 +17,19 @@ export class AuthService {
 
   // Helper to validate user
   async validateUser(email: string, pass: string): Promise<any> {
+    this.logger.log(`Login attempt for: ${email}`);
     const user = await this.usersService.findByEmail(email);
     if (user && (await argon2.verify(user.password, pass))) {
+      this.logger.log(`User authenticated successfully: ${email}`);
       const { password, ...result } = user;
       return result;
     }
+    this.logger.warn(`Invalid credentials for: ${email}`);
     return null;
   }
 
   async login(user: any) {
+    this.logger.log(`Generating tokens for user: ${user.id}`);
     const tokens = await this.generateTokens(user.id, user.role);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
     return {
@@ -34,8 +39,12 @@ export class AuthService {
   }
 
   async register(data: any) {
+    this.logger.log(`Registration attempt for: ${data.email}`);
     const exists = await this.usersService.findByEmail(data.email);
-    if (exists) throw new ConflictException('Email already exists');
+    if (exists) {
+      this.logger.warn(`Registration failed - email already exists: ${data.email}`);
+      throw new ConflictException('Email already exists');
+    }
 
     const hashedPassword = await argon2.hash(data.password);
     
@@ -45,6 +54,8 @@ export class AuthService {
       name: data.name,
       role: Role.EDITOR,
     });
+    
+    this.logger.log(`User registered successfully: ${user.email}`);
 
     const tokens = await this.generateTokens(user.id, user.role);
     await this.updateRefreshToken(user.id, tokens.refreshToken);
@@ -76,6 +87,7 @@ export class AuthService {
   }
 
   async logout(userId: string, accessToken: string) {
+    this.logger.log(`Logout initiated for user: ${userId}`);
     // 1. Revoke all refresh tokens for this user
     await this.prisma.refreshToken.updateMany({
       where: { userId },
@@ -99,6 +111,7 @@ export class AuthService {
   }
 
   async refreshTokens(refreshToken: string) {
+    this.logger.log('Refresh token request received');
     // Find all non-revoked, non-expired tokens for comparison
     const tokenRecords = await this.prisma.refreshToken.findMany({
       where: {
@@ -118,8 +131,11 @@ export class AuthService {
     }
 
     if (!validTokenRecord) {
+      this.logger.warn('Invalid refresh token attempt');
       throw new UnauthorizedException('Invalid Refresh Token');
     }
+    
+    this.logger.log(`Refresh token validated for user: ${validTokenRecord.userId}`);
 
     const user = await this.usersService.findById(validTokenRecord.userId);
     if (!user) throw new UnauthorizedException('User not found');
