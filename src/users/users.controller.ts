@@ -66,4 +66,10 @@ export class UsersController {
   deactivate(@Param('id') id: string) {
       return this.usersService.update(id, { isActive: false });
   }
+
+  @Patch(':id/activate')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  activate(@Param('id') id: string) {
+      return this.usersService.update(id, { isActive: true });
+  }
 }

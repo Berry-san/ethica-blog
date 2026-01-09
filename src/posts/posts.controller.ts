@@ -65,7 +65,7 @@ export class PostsController {
             featuredImagePublicId: featuredImagePublicId,
         };
         
-        return this.postsService.create(data);
+        return this.postsService.create(data, req.user);
       } catch (error) {
         // Handle Prisma foreign key constraint errors
         if (error.code === 'P2003') {
@@ -84,6 +84,11 @@ export class PostsController {
   @Get('category/:categoryId')
   getPostsByCategory(@Param('categoryId') categoryId: string) {
       return this.postsService.findByCategoryId(categoryId);
+  }
+
+  @Get(':slug')
+  getPostBySlug(@Param('slug') slug: string) {
+      return this.postsService.getPostsBySlug(slug);
   }
 
   @Post(':id/upload-inline-image')

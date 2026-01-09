@@ -472,7 +472,7 @@ export class AuthService {
 
   async refreshTokens(refreshToken: string) {
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token is required');
+      throw new UnauthorizedException('refreshToken is required');
     }
 
     this.logger.log('Refresh token request received');

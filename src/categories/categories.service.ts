@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CategoriesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: Prisma.CategoryCreateInput) {
+  async create(data: Omit<Prisma.CategoryCreateInput, 'slug'> & { slug?: string }) {
     // Check if category with same name already exists
     const existingByName = await this.prisma.category.findUnique({ 
       where: { name: data.name } 
@@ -56,7 +56,7 @@ export class CategoriesService {
     // Check if category exists
     await this.findOne(id); // Will throw NotFoundException if not found
     
-    // If updating name, check for duplicates
+    // If updating name, check for duplicates and regenerate slug
     if (data.name && typeof data.name === 'string') {
       const existingByName = await this.prisma.category.findFirst({
         where: { 
@@ -67,9 +67,39 @@ export class CategoriesService {
       if (existingByName) {
         throw new ConflictException('Category with this name already exists');
       }
+      
+      // Auto-generate slug from new name if slug not provided
+      if (!data.slug) {
+        const rawSlug = defaultSlugify(data.name, { lower: true, strict: true });
+        data.slug = rawSlug;
+        
+        // Check if new slug conflicts with existing category
+        const existsBySlug = await this.prisma.category.findFirst({
+          where: { 
+            slug: data.slug,
+            NOT: { id }
+          }
+        });
+        if (existsBySlug) {
+          throw new ConflictException('Category with this slug already exists');
+        }
+      }
     }
     
     return this.prisma.category.update({ where: { id }, data });
+  }
+
+  async findBySlug(slug: string) {
+    const category = await this.prisma.category.findUnique({ 
+      where: { slug },
+      include: { posts: true }
+    });
+    
+    if (!category) {
+      throw new NotFoundException(`Category with slug '${slug}' not found`);
+    }
+    
+    return category;
   }
 
   async remove(id: string) {

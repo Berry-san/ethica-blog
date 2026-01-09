@@ -1,10 +1,10 @@
 import {
-    ArgumentsHost,
-    Catch,
-    ExceptionFilter,
-    HttpException,
-    HttpStatus,
-    Logger,
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
@@ -29,9 +29,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
+        // Get error name from status code
+        error = this.getErrorNameFromStatus(status);
       } else if (typeof exceptionResponse === 'object') {
         message = (exceptionResponse as any).message || message;
-        error = (exceptionResponse as any).error || error;
+        error = (exceptionResponse as any).error || this.getErrorNameFromStatus(status);
       }
     }
     // Handle Prisma errors
@@ -78,6 +80,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.url,
     });
+  }
+
+  /**
+   * Maps HTTP status codes to error names
+   */
+  private getErrorNameFromStatus(status: number): string {
+    const errorNames: Record<number, string> = {
+      400: 'Bad Request',
+      401: 'Unauthorized',
+      403: 'Forbidden',
+      404: 'Not Found',
+      409: 'Conflict',
+      422: 'Unprocessable Entity',
+      429: 'Too Many Requests',
+      500: 'Internal Server Error',
+      502: 'Bad Gateway',
+      503: 'Service Unavailable',
+    };
+
+    return errorNames[status] || 'Internal Server Error';
   }
 
   /**

@@ -49,7 +49,7 @@ export class PostsService {
     return readTime > 0 ? readTime : 1; // Minimum 1 minute
   }
 
-  async create(data: CreatePostDto) {
+  async create(data: CreatePostDto, user: User) {
     const rawSlug = defaultSlugify(data.title, { lower: true, strict: true });
     const slug = data.slug || `${rawSlug}`;
 
@@ -82,6 +82,8 @@ export class PostsService {
       featuredImagePublicId: data.featuredImagePublicId,
       author: { connect: { id: data.authorId } },
       category: { connect: { id: data.categoryId } },
+      // created by should be the logged in user
+      createdBy: { connect: { id: user.id } },
     };
 
     return this.prisma.post.create({ 
@@ -188,11 +190,10 @@ export class PostsService {
     const post = await this.findOne(id);
     
     // Check permission: Admin or Author of the post
-    if (user.role !== Role.ADMIN && post.authorId !== user.id) {
+    if (user.role == Role.AUTHOR && post.authorId !== user.id) {
       throw new UnauthorizedException('You can only update your own posts');
     }
 
-    // If new image is provided, delete the old one from Cloudinary
     if (newImageData && post.featuredImagePublicId) {
       await this.cloudinary.deleteImage(post.featuredImagePublicId);
     }
@@ -214,7 +215,10 @@ export class PostsService {
 
     return this.prisma.post.update({
       where: { id },
-      data: updateData,
+      data: {
+        ...updateData,
+        updatedBy: { connect: { id: user.id } },
+      },
       include: {
         author: { select: { id: true, name: true, email: true, slug: true } },
         category: true,
@@ -287,5 +291,9 @@ export class PostsService {
       url: postImage.url,
       id: postImage.id,
     };
+  }
+
+  async getPostsBySlug(slug: string) {
+    return this.prisma.post.findUnique({ where: { slug } });
   }
 }
